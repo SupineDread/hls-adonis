@@ -26,9 +26,7 @@ export default class VideosController {
 
   public async show({ params, view }: HttpContextContract) {
     const video = await Video.findByOrFail('id', params.id)
-    // const cloudfront = { url: 'YOUR-CLOUDFRONT-URL-HERE' } // <- Put your cloudfront url here DON'T include https://
 
-    // return view.render('videos/show.edge', { video, cloudfront })
     return view.render('videos/show.edge', { video })
   }
 
@@ -40,10 +38,10 @@ export default class VideosController {
       name: name,
     })
     // Since id is generated at the database level, we can't use video.id before video is created
-    video.originalVideo = `uploads/uploads/${video.id}/original.mp4`
+    video.originalVideo = `uploads/${video.id}/original.mp4`
 
     await videoFile?.moveToDisk(
-      `uploads/uploads/${video.id}`,
+      `uploads/${video.id}`,
       {
         name: `original.mp4`,
       },
@@ -56,19 +54,19 @@ export default class VideosController {
   }
 
   private async transcodeVideo(video: Video): Promise<void> {
-    const local = Drive.use('local')
+    const local = Drive.use('tmp')
     const s3 = Drive.use('local')
 
     // Get FileBuffer from S3
     const videoFileBuffer = await s3.get(video.originalVideo)
     // Save S3 file to local tmp dir
-    await local.put(`uploads/transcode/${video.id}/original.mp4`, videoFileBuffer)
+    await local.put(`transcode/${video.id}/original.mp4`, videoFileBuffer)
     // Get reference to tmp file
-    const tmpVideoPath = Application.tmpPath(`uploads/transcode/${video.id}/original.mp4`)
+    const tmpVideoPath = Application.tmpPath(`transcode/${video.id}/original.mp4`)
 
     const transcoder = new Transcoder(
       tmpVideoPath,
-      Application.tmpPath(`uploads/transcode/${video.id}`),
+      Application.tmpPath(`transcode/${video.id}`),
       {
         ffmpegPath: ffmpeg.path,
         ffprobePath: ffprobe.path,
@@ -86,7 +84,7 @@ export default class VideosController {
     // After transcoding, upload files to S3
     let files
     try {
-      files = fs.readdirSync(Application.tmpPath(`uploads/transcode/${video.id}/`))
+      files = fs.readdirSync(Application.tmpPath(`transcode/${video.id}/`))
     } catch (err) {
       Logger.error(err)
     }
@@ -94,19 +92,19 @@ export default class VideosController {
     await files.forEach(async (file) => {
       const extname = path.extname(file)
       if (extname === '.ts' || extname === '.m3u8') {
-        const fileStream = await local.get(`uploads/transcode/${video.id}/${file}`)
+        const fileStream = await local.get(`transcode/${video.id}/${file}`)
         await s3.put(`uploads/${video.id}/${file}`, fileStream)
       }
     })
 
     // Then, clean up our tmp/ dir
     try {
-      await fs.rmSync(Application.tmpPath(`uploads/transcode/${video.id}/`), { recursive: true })
+      await fs.rmSync(Application.tmpPath(`transcode/${video.id}/`), { recursive: true })
     } catch (err) {
       Logger.error(err)
     }
 
-    video.hlsPlaylist = `uploads/uploads/${video.id}/index.m3u8`
+    video.hlsPlaylist = `uploads/${video.id}/index.m3u8`
 
     await video.save()
 
