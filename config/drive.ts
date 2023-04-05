@@ -36,7 +36,7 @@ export default driveConfig({
       visibility: 'public',
       root: "storage",
       serveFiles: true,
-      basePath: '/uploads',
+      basePath: '/media',
     },
 
     tmp: {

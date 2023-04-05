@@ -38,10 +38,10 @@ export default class VideosController {
       name: name,
     })
     // Since id is generated at the database level, we can't use video.id before video is created
-    video.originalVideo = `uploads/${video.id}/original.mp4`
+    video.originalVideo = `videos/${video.id}/original.mp4`
 
     await videoFile?.moveToDisk(
-      `uploads/${video.id}`,
+      `videos/${video.id}`,
       {
         name: `original.mp4`,
       },
@@ -93,9 +93,17 @@ export default class VideosController {
       const extname = path.extname(file)
       if (extname === '.ts' || extname === '.m3u8') {
         const fileStream = await local.get(`transcode/${video.id}/${file}`)
-        await s3.put(`uploads/${video.id}/${file}`, fileStream)
+        await s3.put(`videos/${video.id}/${file}`, fileStream)
       }
     })
+
+    // for await (let file of files) {
+    //   const extname = path.extname(file)
+    //   if (extname === '.ts' || extname === '.m3u8') {
+    //     const fileStream = await local.get(`transcode/${video.id}/${file}`)
+    //     await s3.put(`uploads/${video.id}/${file}`, fileStream)
+    //   }
+    // }
 
     // Then, clean up our tmp/ dir
     try {
@@ -104,7 +112,7 @@ export default class VideosController {
       Logger.error(err)
     }
 
-    video.hlsPlaylist = `uploads/${video.id}/index.m3u8`
+    video.hlsPlaylist = `videos/${video.id}/index.m3u8`
 
     await video.save()
 
